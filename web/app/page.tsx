@@ -1,51 +1,87 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type HealthState =
-  | { status: "loading" }
-  | { status: "ok"; body: unknown }
-  | { status: "error"; message: string };
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { listNotebooks, createNotebook, type Notebook } from "@/lib/api";
+import { buttonClass, errorClass, inputClass } from "@/lib/ui";
 
 export default function Home() {
-  const [health, setHealth] = useState<HealthState>({ status: "loading" });
+  const router = useRouter();
+  const [notebooks, setNotebooks] = useState<Notebook[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiUrl) {
-      setHealth({
-        status: "error",
-        message: "NEXT_PUBLIC_API_URL is not set",
-      });
-      return;
-    }
-
-    fetch(`${apiUrl}/health`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`/health responded with ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((body) => setHealth({ status: "ok", body }))
-      .catch((err) =>
-        setHealth({
-          status: "error",
-          message: err instanceof Error ? err.message : String(err),
-        }),
-      );
+    listNotebooks()
+      .then(setNotebooks)
+      .catch((err) => setListError(err instanceof Error ? err.message : String(err)));
   }, []);
 
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed) return;
+
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const notebook = await createNotebook(trimmed);
+      router.push(`/notebooks/${notebook.id}`);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err));
+      setCreating(false);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center p-8">
-      <main className="flex flex-col items-center gap-4">
-        <h1 className="text-xl font-semibold">EverNotebook</h1>
-        <p className="text-sm text-gray-500">API health check</p>
-        <pre className="rounded bg-black/[.05] dark:bg-white/[.06] px-4 py-3 text-sm">
-          {JSON.stringify(health, null, 2)}
-        </pre>
-      </main>
-    </div>
+    <main className="mx-auto max-w-2xl px-6 py-16">
+      <h1 className="text-2xl font-semibold tracking-tight">EverNotebook</h1>
+      <p className="mt-2 text-neutral-500 dark:text-neutral-400">
+        Notebooks grounded strictly in your own sources.
+      </p>
+
+      <form onSubmit={handleCreate} className="mt-8 flex gap-2">
+        <input
+          className={inputClass}
+          placeholder="New notebook title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={creating}
+        />
+        <button type="submit" className={buttonClass} disabled={creating || !title.trim()}>
+          {creating ? "Creating…" : "New Notebook"}
+        </button>
+      </form>
+      {createError && <p className={`mt-2 ${errorClass}`}>{createError}</p>}
+
+      <div className="mt-12">
+        {notebooks === null && !listError && (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading notebooks…</p>
+        )}
+        {listError && <p className={errorClass}>{listError}</p>}
+        {notebooks?.length === 0 && (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            No notebooks yet — create one above.
+          </p>
+        )}
+        {notebooks && notebooks.length > 0 && (
+          <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
+            {notebooks.map((nb) => (
+              <li key={nb.id}>
+                <Link
+                  href={`/notebooks/${nb.id}`}
+                  className="block py-4 text-neutral-900 dark:text-neutral-100 hover:text-neutral-500 dark:hover:text-neutral-400"
+                >
+                  {nb.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </main>
   );
 }

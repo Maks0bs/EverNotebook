@@ -228,6 +228,7 @@ def answer_question(conn, notebook_id: uuid.UUID, question: str) -> dict:
 
     citations = [
         {
+            "marker": n,
             "source_id": chunks[n - 1]["source_id"],
             "source_title": chunks[n - 1]["source_title"],
             "start_char": chunks[n - 1]["start_char"],

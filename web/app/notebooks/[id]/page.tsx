@@ -1,0 +1,254 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import {
+  askQuestion,
+  createSource,
+  generateSummary,
+  getNotebook,
+  type ChatResponse,
+  type NotebookDetail,
+} from "@/lib/api";
+import {
+  buttonClass,
+  cardClass,
+  errorClass,
+  inputClass,
+  sectionTitleClass,
+  textareaClass,
+} from "@/lib/ui";
+
+type ChatTurn = {
+  question: string;
+  response?: ChatResponse;
+  error?: string;
+};
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+export default function NotebookPage() {
+  const params = useParams<{ id: string }>();
+  const notebookId = params.id;
+
+  const [notebook, setNotebook] = useState<NotebookDetail | null>(null);
+  const [notebookError, setNotebookError] = useState<string | null>(null);
+
+  const [sourceTitle, setSourceTitle] = useState("");
+  const [sourceContent, setSourceContent] = useState("");
+  const [addingSource, setAddingSource] = useState(false);
+  const [addSourceError, setAddSourceError] = useState<string | null>(null);
+
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const [question, setQuestion] = useState("");
+  const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  function loadNotebook() {
+    setNotebookError(null);
+    getNotebook(notebookId)
+      .then(setNotebook)
+      .catch((err) => setNotebookError(errorMessage(err)));
+  }
+
+  useEffect(() => {
+    if (notebookId) loadNotebook();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notebookId]);
+
+  async function handleAddSource(e: React.FormEvent) {
+    e.preventDefault();
+    const title = sourceTitle.trim();
+    const content = sourceContent.trim();
+    if (!title || !content) return;
+
+    setAddingSource(true);
+    setAddSourceError(null);
+    try {
+      await createSource(notebookId, title, content);
+      setSourceTitle("");
+      setSourceContent("");
+      loadNotebook();
+    } catch (err) {
+      setAddSourceError(errorMessage(err));
+    } finally {
+      setAddingSource(false);
+    }
+  }
+
+  async function handleGenerateSummary() {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const result = await generateSummary(notebookId);
+      setSummary(result.summary);
+    } catch (err) {
+      setSummaryError(errorMessage(err));
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
+  async function handleAsk(e: React.FormEvent) {
+    e.preventDefault();
+    const q = question.trim();
+    if (!q) return;
+
+    setChatLoading(true);
+    setQuestion("");
+    try {
+      const response = await askQuestion(notebookId, q);
+      setChatTurns((turns) => [...turns, { question: q, response }]);
+    } catch (err) {
+      setChatTurns((turns) => [...turns, { question: q, error: errorMessage(err) }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  if (notebookError) {
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-16">
+        <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
+          ← Notebooks
+        </Link>
+        <p className={`mt-6 ${errorClass}`}>{notebookError}</p>
+      </main>
+    );
+  }
+
+  if (!notebook) {
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-16">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading notebook…</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-2xl px-6 py-16">
+      <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
+        ← Notebooks
+      </Link>
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight">{notebook.title}</h1>
+
+      {/* Sources */}
+      <section className="mt-12">
+        <h2 className={sectionTitleClass}>Sources</h2>
+
+        {notebook.sources.length === 0 ? (
+          <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+            No sources yet — add one below.
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-neutral-200 dark:divide-neutral-800">
+            {notebook.sources.map((s) => (
+              <li key={s.id} className="py-2 text-sm text-neutral-900 dark:text-neutral-100">
+                {s.title}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form onSubmit={handleAddSource} className="mt-5 flex flex-col gap-3">
+          <input
+            className={inputClass}
+            placeholder="Source title"
+            value={sourceTitle}
+            onChange={(e) => setSourceTitle(e.target.value)}
+            disabled={addingSource}
+          />
+          <textarea
+            className={textareaClass}
+            placeholder="Paste source text here"
+            value={sourceContent}
+            onChange={(e) => setSourceContent(e.target.value)}
+            disabled={addingSource}
+          />
+          <button
+            type="submit"
+            className={`${buttonClass} self-start`}
+            disabled={addingSource || !sourceTitle.trim() || !sourceContent.trim()}
+          >
+            {addingSource ? "Adding…" : "Add Source"}
+          </button>
+        </form>
+        {addSourceError && <p className={`mt-2 ${errorClass}`}>{addSourceError}</p>}
+      </section>
+
+      {/* Summary */}
+      <section className="mt-12">
+        <h2 className={sectionTitleClass}>Summary</h2>
+        <button
+          onClick={handleGenerateSummary}
+          className={`mt-3 ${buttonClass}`}
+          disabled={summaryLoading}
+        >
+          {summaryLoading ? "Generating…" : "Generate Summary"}
+        </button>
+        {summaryError && <p className={`mt-2 ${errorClass}`}>{summaryError}</p>}
+        {summary && (
+          <div className={`mt-4 ${cardClass}`}>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{summary}</p>
+          </div>
+        )}
+      </section>
+
+      {/* Chat */}
+      <section className="mt-12">
+        <h2 className={sectionTitleClass}>Ask</h2>
+
+        <div className="mt-3 flex flex-col gap-6">
+          {chatTurns.map((turn, i) => (
+            <div key={i} className={cardClass}>
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                {turn.question}
+              </p>
+              {turn.error && <p className={`mt-2 ${errorClass}`}>{turn.error}</p>}
+              {turn.response && (
+                <>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+                    {turn.response.answer}
+                  </p>
+                  {turn.response.citations.length > 0 && (
+                    <ol className="mt-3 flex flex-col gap-1 border-t border-neutral-200 dark:border-neutral-800 pt-3 text-xs text-neutral-500 dark:text-neutral-400">
+                      {turn.response.citations.map((c) => (
+                        <li key={c.marker}>
+                          [{c.marker}] <span className="font-medium">{c.source_title}</span> —{" "}
+                          &ldquo;{c.snippet.slice(0, 160)}
+                          {c.snippet.length > 160 ? "…" : ""}&rdquo;
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+          {chatLoading && (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Thinking…</p>
+          )}
+        </div>
+
+        <form onSubmit={handleAsk} className="mt-5 flex gap-2">
+          <input
+            className={inputClass}
+            placeholder="Ask a question about this notebook's sources"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            disabled={chatLoading}
+          />
+          <button type="submit" className={buttonClass} disabled={chatLoading || !question.trim()}>
+            {chatLoading ? "Asking…" : "Ask"}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
