@@ -7,7 +7,7 @@ EverNotebook is a minimal NotebookLM clone: create a notebook, add sources (past
 ## Screenshot
 
 <!-- TODO: screenshot of a notebook's chat view with an answer, inline citation markers, and the footnote list -->
-![EverNotebook notebook view](docs/screenshot.png)
+![EverNotebook notebook view](docs/demo.gif)
 
 ## Architecture
 
