@@ -159,7 +159,7 @@ def retrieve(conn, notebook_id: uuid.UUID, query: str, k: int = RETRIEVAL_K) -> 
             FROM chunks c
             JOIN sources s ON s.id = c.source_id
             WHERE c.notebook_id = %s
-            ORDER BY c.embedding <=> %s
+            ORDER BY c.embedding <=> %s::vector
             LIMIT %s
             """,
             (notebook_id, query_embedding, k),
