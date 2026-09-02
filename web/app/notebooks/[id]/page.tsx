@@ -9,6 +9,7 @@ import {
   generateSummary,
   getNotebook,
   type ChatResponse,
+  type Citation,
   type NotebookDetail,
 } from "@/lib/api";
 import {
@@ -28,6 +29,90 @@ type ChatTurn = {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+const CITATION_MARKER = /(\[\d+\])/g;
+
+function footnoteId(turnIndex: number, marker: number): string {
+  return `citation-${turnIndex}-${marker}`;
+}
+
+function CitationMarker({
+  marker,
+  citation,
+  turnIndex,
+}: {
+  marker: number;
+  citation: Citation;
+  turnIndex: number;
+}) {
+  function handleClick() {
+    const el = document.getElementById(footnoteId(turnIndex, marker));
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("bg-neutral-200", "dark:bg-neutral-700");
+    setTimeout(() => el.classList.remove("bg-neutral-200", "dark:bg-neutral-700"), 1000);
+  }
+
+  return (
+    <span className="group relative">
+      <button
+        type="button"
+        onClick={handleClick}
+        className="mx-0.5 cursor-pointer align-baseline text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+      >
+        [{marker}]
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 w-64 -translate-x-1/2 rounded-md border border-neutral-200 bg-white p-2 text-xs leading-relaxed text-neutral-700 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+      >
+        <span className="font-medium text-neutral-900 dark:text-neutral-100">
+          {citation.source_title}
+        </span>
+        <br />
+        &ldquo;{citation.snippet.slice(0, 200)}
+        {citation.snippet.length > 200 ? "…" : ""}&rdquo;
+      </span>
+    </span>
+  );
+}
+
+function AnswerText({
+  text,
+  citations,
+  turnIndex,
+}: {
+  text: string;
+  citations: Citation[];
+  turnIndex: number;
+}) {
+  const citationsByMarker = new Map(citations.map((c) => [c.marker, c]));
+  const parts = text.split(CITATION_MARKER);
+
+  return (
+    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+      {parts.map((part, i) => {
+        const match = part.match(/^\[(\d+)\]$/);
+        const citation = match ? citationsByMarker.get(Number(match[1])) : undefined;
+
+        if (match && citation) {
+          return (
+            <CitationMarker
+              key={i}
+              marker={Number(match[1])}
+              citation={citation}
+              turnIndex={turnIndex}
+            />
+          );
+        }
+        // Plain text, including markers with no matching citation (e.g.
+        // dropped as out-of-range by the backend) — never a dead interactive
+        // element for those.
+        return <span key={i}>{part}</span>;
+      })}
+    </p>
+  );
 }
 
 export default function NotebookPage() {
@@ -213,13 +298,19 @@ export default function NotebookPage() {
               {turn.error && <p className={`mt-2 ${errorClass}`}>{turn.error}</p>}
               {turn.response && (
                 <>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-                    {turn.response.answer}
-                  </p>
+                  <AnswerText
+                    text={turn.response.answer}
+                    citations={turn.response.citations}
+                    turnIndex={i}
+                  />
                   {turn.response.citations.length > 0 && (
                     <ol className="mt-3 flex flex-col gap-1 border-t border-neutral-200 dark:border-neutral-800 pt-3 text-xs text-neutral-500 dark:text-neutral-400">
                       {turn.response.citations.map((c) => (
-                        <li key={c.marker}>
+                        <li
+                          key={c.marker}
+                          id={footnoteId(i, c.marker)}
+                          className="rounded px-1 py-0.5 transition-colors duration-500"
+                        >
                           [{c.marker}] <span className="font-medium">{c.source_title}</span> —{" "}
                           &ldquo;{c.snippet.slice(0, 160)}
                           {c.snippet.length > 160 ? "…" : ""}&rdquo;
