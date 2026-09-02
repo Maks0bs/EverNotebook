@@ -6,3 +6,4 @@ openai
 pypdf
 python-multipart
 python-dotenv
+pytest
