@@ -48,6 +48,10 @@ class SourceCreate(BaseModel):
     content: str
 
 
+class ChatRequest(BaseModel):
+    question: str
+
+
 @app.post("/notebooks")
 def create_notebook(body: NotebookCreate):
     with get_db_connection() as conn:
@@ -84,3 +88,19 @@ def create_source(notebook_id: uuid.UUID, body: SourceCreate):
         db.insert_chunks(conn, source["id"], notebook_id, chunks)
 
     return source
+
+
+@app.post("/notebooks/{notebook_id}/chat")
+def chat(notebook_id: uuid.UUID, body: ChatRequest):
+    with get_db_connection() as conn:
+        if db.get_notebook(conn, notebook_id) is None:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+        return rag.answer_question(conn, notebook_id, body.question)
+
+
+@app.post("/notebooks/{notebook_id}/summary")
+def summary(notebook_id: uuid.UUID):
+    with get_db_connection() as conn:
+        if db.get_notebook(conn, notebook_id) is None:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+        return {"summary": rag.summarize_notebook(conn, notebook_id)}
