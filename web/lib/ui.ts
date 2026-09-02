@@ -11,3 +11,6 @@ export const cardClass = "rounded-lg border border-neutral-200 dark:border-neutr
 export const sectionTitleClass = "text-sm font-semibold tracking-wide text-neutral-500 dark:text-neutral-400 uppercase";
 
 export const errorClass = "text-sm text-red-600 dark:text-red-400";
+
+export const warningClass =
+  "mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300";

@@ -20,6 +20,7 @@ import {
   inputClass,
   sectionTitleClass,
   textareaClass,
+  warningClass,
 } from "@/lib/ui";
 
 type ChatTurn = {
@@ -348,6 +349,9 @@ export default function NotebookPage() {
                     citations={turn.response.citations}
                     turnIndex={i}
                   />
+                  {turn.response.warning && (
+                    <p className={warningClass}>{turn.response.warning}</p>
+                  )}
                   {turn.response.citations.length > 0 && (
                     <ol className="mt-3 flex flex-col gap-1 border-t border-neutral-200 dark:border-neutral-800 pt-3 text-xs text-neutral-500 dark:text-neutral-400">
                       {turn.response.citations.map((c) => (

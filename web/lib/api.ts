@@ -28,6 +28,7 @@ export type Citation = {
 export type ChatResponse = {
   answer: string;
   citations: Citation[];
+  warning?: string;
 };
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {

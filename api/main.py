@@ -5,7 +5,7 @@ from io import BytesIO
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pypdf import PdfReader
 
 import db
@@ -54,6 +54,13 @@ class SourceCreate(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
+
+    @field_validator("question")
+    @classmethod
+    def question_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("question must not be empty")
+        return v
 
 
 @app.post("/notebooks")
