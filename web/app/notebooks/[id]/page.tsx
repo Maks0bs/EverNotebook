@@ -8,6 +8,7 @@ import {
   createSource,
   generateSummary,
   getNotebook,
+  uploadSourcePdf,
   type ChatResponse,
   type Citation,
   type NotebookDetail,
@@ -127,6 +128,12 @@ export default function NotebookPage() {
   const [addingSource, setAddingSource] = useState(false);
   const [addSourceError, setAddSourceError] = useState<string | null>(null);
 
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfInputKey, setPdfInputKey] = useState(0);
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState(0);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -164,6 +171,24 @@ export default function NotebookPage() {
       setAddSourceError(errorMessage(err));
     } finally {
       setAddingSource(false);
+    }
+  }
+
+  async function handleUploadPdf() {
+    if (!pdfFile) return;
+
+    setPdfUploading(true);
+    setPdfProgress(0);
+    setPdfError(null);
+    try {
+      await uploadSourcePdf(notebookId, pdfFile, setPdfProgress);
+      setPdfFile(null);
+      setPdfInputKey((k) => k + 1); // remount the file input to clear its displayed filename
+      loadNotebook();
+    } catch (err) {
+      setPdfError(errorMessage(err));
+    } finally {
+      setPdfUploading(false);
     }
   }
 
@@ -265,6 +290,26 @@ export default function NotebookPage() {
           </button>
         </form>
         {addSourceError && <p className={`mt-2 ${errorClass}`}>{addSourceError}</p>}
+
+        <div className="mt-5 flex items-center gap-3">
+          <input
+            key={pdfInputKey}
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+            disabled={pdfUploading}
+            className="text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-300 file:bg-transparent file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-900 hover:file:bg-neutral-100 disabled:opacity-50 dark:text-neutral-400 dark:file:border-neutral-700 dark:file:text-neutral-100 dark:hover:file:bg-neutral-800"
+          />
+          <button
+            type="button"
+            onClick={handleUploadPdf}
+            className={buttonClass}
+            disabled={pdfUploading || !pdfFile}
+          >
+            {pdfUploading ? `Uploading… ${pdfProgress}%` : "Upload PDF"}
+          </button>
+        </div>
+        {pdfError && <p className={`mt-2 ${errorClass}`}>{pdfError}</p>}
       </section>
 
       {/* Summary */}

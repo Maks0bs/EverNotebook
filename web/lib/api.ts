@@ -97,3 +97,63 @@ export function generateSummary(notebookId: string) {
     method: "POST",
   });
 }
+
+function extractDetail(responseText: string, fallback: string): string {
+  try {
+    const body = JSON.parse(responseText);
+    if (body?.detail) {
+      return typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    }
+  } catch {
+    // response wasn't JSON — use fallback below
+  }
+  return fallback;
+}
+
+// Uses XMLHttpRequest instead of fetch so upload progress can be tracked via
+// xhr.upload.onprogress — fetch has no reliable cross-browser way to observe
+// request-body upload progress.
+export function uploadSourcePdf(
+  notebookId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<Source> {
+  if (!API_URL) {
+    return Promise.reject(new Error("NEXT_PUBLIC_API_URL is not set"));
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/notebooks/${notebookId}/sources/pdf`);
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText) as Source);
+      } else {
+        reject(
+          new Error(
+            extractDetail(xhr.responseText, `Upload failed with status ${xhr.status}`),
+          ),
+        );
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(
+        new Error(
+          "Could not reach the API. It may be waking up from an idle state — try again in a moment.",
+        ),
+      );
+    };
+
+    const formData = new FormData();
+    formData.append("file", file);
+    xhr.send(formData);
+  });
+}

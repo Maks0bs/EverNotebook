@@ -1,16 +1,20 @@
 import os
 import uuid
+from io import BytesIO
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pypdf import PdfReader
 
 import db
 import rag
 from db import get_db_connection
 
 load_dotenv()
+
+PDF_MAX_BYTES = 10 * 1024 * 1024
 
 app = FastAPI()
 
@@ -82,6 +86,41 @@ def create_source(notebook_id: uuid.UUID, body: SourceCreate):
         source = db.create_source(conn, notebook_id, body.title, body.content)
 
         chunks = rag.chunk_text(body.content)
+        embeddings = rag.embed_texts([c["content"] for c in chunks])
+        for chunk, embedding in zip(chunks, embeddings):
+            chunk["embedding"] = embedding
+        db.insert_chunks(conn, source["id"], notebook_id, chunks)
+
+    return source
+
+
+@app.post("/notebooks/{notebook_id}/sources/pdf")
+def create_source_pdf(notebook_id: uuid.UUID, file: UploadFile):
+    content_bytes = file.file.read(PDF_MAX_BYTES + 1)
+    if len(content_bytes) > PDF_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="PDF exceeds the 10MB upload limit")
+
+    try:
+        reader = PdfReader(BytesIO(content_bytes))
+        text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Could not read this file as a PDF") from exc
+
+    if not text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="No extractable text found in this PDF (scanned or image-only PDFs aren't supported)",
+        )
+
+    title = os.path.splitext(file.filename or "Untitled")[0]
+
+    with get_db_connection() as conn:
+        if db.get_notebook(conn, notebook_id) is None:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+
+        source = db.create_source(conn, notebook_id, title, text)
+
+        chunks = rag.chunk_text(text)
         embeddings = rag.embed_texts([c["content"] for c in chunks])
         for chunk, embedding in zip(chunks, embeddings):
             chunk["embedding"] = embedding
